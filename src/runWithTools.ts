@@ -155,8 +155,9 @@ export const runWithTools = async (
 					content: JSON.stringify(toolCallObjectJson),
 				});
 
+				const toolName = toolCallObjectJson.function?.name || toolCallObjectJson.name;
 				const selectedTool = input.tools.find(
-					(tool) => tool.name === toolCallObjectJson.name,
+					(tool) => tool.name === toolName,
 				);
 
 				if (!selectedTool) {
@@ -169,7 +170,7 @@ export const runWithTools = async (
 				const fn = selectedTool.function;
 
 				if (fn !== undefined && selectedTool.parameters !== undefined) {
-					const args = toolCallObjectJson.arguments;
+					const args = toolCallObjectJson.function?.arguments || toolCallObjectJson.arguments;
 
 					// Validate arguments if strict validation is enabled
 					if (
