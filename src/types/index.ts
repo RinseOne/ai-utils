@@ -43,35 +43,35 @@ export type AiTextGenerationToolInputWithFunction =
 type InferValueType<T extends JSONSchema7> = T extends { type: "string" }
 	? string
 	: T extends { type: "number" }
-		? number
-		: T extends { type: "integer" }
-			? number
-			: T extends { type: "boolean" }
-				? boolean
-				: T extends { type: "null" }
-					? null
-					: T extends { type: "array"; items: JSONSchema7 }
-						? Array<InferValueType<T["items"]>>
-						: T extends {
-									type: "object";
-									properties: infer P;
-									required?: readonly string[];
-							  }
-							? InferObjectProperties<P, T["required"]>
-							: unknown;
+	? number
+	: T extends { type: "integer" }
+	? number
+	: T extends { type: "boolean" }
+	? boolean
+	: T extends { type: "null" }
+	? null
+	: T extends { type: "array"; items: JSONSchema7 }
+	? Array<InferValueType<T["items"]>>
+	: T extends {
+		type: "object";
+		properties: infer P;
+		required?: readonly string[];
+	}
+	? InferObjectProperties<P, T["required"]>
+	: unknown;
 
 type InferObjectProperties<
 	Properties,
 	Required extends readonly string[] | undefined,
 > = {
-	[Property in keyof Properties]: Properties[Property] extends JSONSchema7
+		[Property in keyof Properties]: Properties[Property] extends JSONSchema7
 		? Required extends readonly string[]
-			? Property extends Required[number]
-				? InferValueType<Properties[Property]>
-				: InferValueType<Properties[Property]> | undefined
-			: InferValueType<Properties[Property]> | undefined
+		? Property extends Required[number]
+		? InferValueType<Properties[Property]>
+		: InferValueType<Properties[Property]> | undefined
+		: InferValueType<Properties[Property]> | undefined
 		: never;
-};
+	};
 
 type InferFunctionParameterType<T extends JSONSchema7> = T extends {
 	type: "object";

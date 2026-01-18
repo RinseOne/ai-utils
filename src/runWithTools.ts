@@ -2,9 +2,12 @@ import { Logger } from "./logger";
 import { validateArgsWithZod } from "./utils";
 import {
 	Ai,
+	AiModels,
 	AiTextGenerationInput,
 	AiTextGenerationOutput,
-	BaseAiTextGenerationModels,
+	AiTextGenerationToolLegacyOutput,
+	AiTextGenerationToolOutput,
+	BaseAiTextGeneration,
 	RoleScopedChatInput,
 } from "@cloudflare/workers-types";
 import { AiTextGenerationToolInputWithFunction } from "./types";
@@ -30,7 +33,7 @@ export const runWithTools = async (
 	/** The AI instance to use for the run. */
 	ai: Ai,
 	/** The function calling model to use for the run. We recommend using `@hf/nousresearch/hermes-2-pro-mistral-7b`, `llama-3` or equivalent model that's suited for function calling. */
-	model: BaseAiTextGenerationModels,
+	model: keyof AiModels,
 	/** The input for the runWithTools call. */
 	input: {
 		/** The messages to be sent to the AI. */
@@ -53,7 +56,7 @@ export const runWithTools = async (
 		trimFunction?: (
 			tools: AiTextGenerationToolInputWithFunction[],
 			ai: Ai,
-			model: BaseAiTextGenerationModels,
+			model: keyof AiModels,
 			messages: RoleScopedChatInput[],
 		) => Promise<AiTextGenerationToolInputWithFunction[]>;
 	} = {},
@@ -66,7 +69,7 @@ export const runWithTools = async (
 		trimFunction = async (
 			tools: AiTextGenerationToolInputWithFunction[],
 			ai: Ai,
-			model: BaseAiTextGenerationModels,
+			model: keyof AiModels,
 			messages: RoleScopedChatInput[],
 		) => tools as AiTextGenerationToolInputWithFunction[],
 		strictValidation = false,
@@ -112,7 +115,7 @@ export const runWithTools = async (
 		maxRecursiveToolRuns,
 	}: {
 		ai: Ai;
-		model: BaseAiTextGenerationModels;
+		model: keyof AiModels;
 		messages: RoleScopedChatInput[];
 		streamFinalResponse: boolean;
 		maxRecursiveToolRuns: number;
@@ -132,6 +135,10 @@ export const runWithTools = async (
 				tool_calls?: {
 					name: string;
 					arguments: unknown;
+					function?: {
+						name: string;
+						arguments: unknown;
+					};
 				}[];
 			};
 
@@ -148,21 +155,29 @@ export const runWithTools = async (
 			tool_calls = response.tool_calls?.filter(Boolean) ?? [];
 
 			const toolCallPromises = tool_calls.map(async (toolCall) => {
-				const toolCallObjectJson = toolCall;
+				const toolCallObjectJson = toolCall as
+					| AiTextGenerationToolLegacyOutput
+					| AiTextGenerationToolOutput;
 
 				messages.push({
 					role: "assistant",
 					content: JSON.stringify(toolCallObjectJson),
 				});
 
-				const toolName = toolCallObjectJson.function?.name || toolCallObjectJson.name;
+				let toolName: string = "";
+				if ("function" in toolCallObjectJson) {
+					toolName = toolCallObjectJson.function.name;
+				} else {
+					toolName = toolCallObjectJson.name;
+				}
+
 				const selectedTool = input.tools.find(
 					(tool) => tool.name === toolName,
 				);
 
 				if (!selectedTool) {
 					Logger.error(
-						`Tool ${toolCallObjectJson.name} not found, maybe AI hallucinated`,
+						`Tool ${toolName} not found, maybe AI hallucinated`,
 					);
 					return; // Or handle the error accordingly
 				}
@@ -170,7 +185,23 @@ export const runWithTools = async (
 				const fn = selectedTool.function;
 
 				if (fn !== undefined && selectedTool.parameters !== undefined) {
-					const args = toolCallObjectJson.function?.arguments || toolCallObjectJson.arguments;
+					let args: any;
+					if ("function" in toolCallObjectJson) {
+						args = toolCallObjectJson.function.arguments;
+						// Parse arguments if they are a string (which they are in the new format)
+						if (typeof args === "string") {
+							try {
+								args = JSON.parse(args);
+							} catch (e) {
+								Logger.error(
+									`Failed to parse arguments for tool ${toolName}: ${args}`,
+								);
+								return; // Or handle the error accordingly
+							}
+						}
+					} else {
+						args = toolCallObjectJson.arguments;
+					}
 
 					// Validate arguments if strict validation is enabled
 					if (
@@ -198,7 +229,6 @@ export const runWithTools = async (
 						messages.push({
 							role: "tool",
 							content: JSON.stringify(result),
-							// @ts-expect-error workerd types
 							name: selectedTool.name,
 						});
 					} catch (error) {
@@ -206,15 +236,14 @@ export const runWithTools = async (
 						messages.push({
 							role: "tool",
 							content: `Error executing tool ${selectedTool.name}: ${(error as Error).message}`,
-							// @ts-expect-error workerd types
 							name: selectedTool.name,
 						});
 					}
 				} else {
 					Logger.error(
-						`Function for tool ${toolCallObjectJson.name} is undefined`,
+						`Function for tool ${toolName} is undefined`,
 					);
-          return response
+					return response
 				}
 			});
 
@@ -245,7 +274,7 @@ export const runWithTools = async (
 				);
 
 				Logger.info(`Total number of characters: ${totalCharacters}`);
-				return finalResponse;
+				return finalResponse as AiTextGenerationOutput;
 			}
 		} catch (error) {
 			Logger.error("Error in runAndProcessToolCall:", error);
