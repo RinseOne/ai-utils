@@ -2,7 +2,6 @@ import { Logger } from "./logger";
 import { validateArgsWithZod } from "./utils";
 import {
 	Ai,
-	AiModels,
 	AiTextGenerationInput,
 	AiTextGenerationOutput,
 	AiTextGenerationToolLegacyOutput,
@@ -10,7 +9,7 @@ import {
 	BaseAiTextGeneration,
 	RoleScopedChatInput,
 } from "@cloudflare/workers-types";
-import { AiTextGenerationToolInputWithFunction } from "./types";
+import { AiTextGenerationToolInputWithFunction, AiModel } from "./types";
 
 /**
  * Runs a set of tools on a given input and returns the final response in the same format as the AI.run call.
@@ -33,7 +32,7 @@ export const runWithTools = async (
 	/** The AI instance to use for the run. */
 	ai: Ai,
 	/** The function calling model to use for the run. We recommend using `@hf/nousresearch/hermes-2-pro-mistral-7b`, `llama-3` or equivalent model that's suited for function calling. */
-	model: keyof AiModels,
+	model: AiModel,
 	/** The input for the runWithTools call. */
 	input: {
 		/** The messages to be sent to the AI. */
@@ -56,7 +55,7 @@ export const runWithTools = async (
 		trimFunction?: (
 			tools: AiTextGenerationToolInputWithFunction[],
 			ai: Ai,
-			model: keyof AiModels,
+			model: AiModel,
 			messages: RoleScopedChatInput[],
 		) => Promise<AiTextGenerationToolInputWithFunction[]>;
 	} = {},
@@ -69,7 +68,7 @@ export const runWithTools = async (
 		trimFunction = async (
 			tools: AiTextGenerationToolInputWithFunction[],
 			ai: Ai,
-			model: keyof AiModels,
+			model: AiModel,
 			messages: RoleScopedChatInput[],
 		) => tools as AiTextGenerationToolInputWithFunction[],
 		strictValidation = false,
@@ -115,7 +114,7 @@ export const runWithTools = async (
 		maxRecursiveToolRuns,
 	}: {
 		ai: Ai;
-		model: keyof AiModels;
+		model: AiModel;
 		messages: RoleScopedChatInput[];
 		streamFinalResponse: boolean;
 		maxRecursiveToolRuns: number;
